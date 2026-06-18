@@ -5,9 +5,9 @@ VPS 统一代理控制台。
 该模块采用当前生产环境同款结构：
 
 ```text
-/usr/local/bin/proxy*                 # 命令分发入口
-/usr/local/lib/proxy-tools/proxy-core.sh  # 核心逻辑
-/etc/proxy-tools.conf                 # 配置文件
+/usr/local/bin/proxy*                     命令分发入口
+/usr/local/lib/proxy-tools/proxy-core.sh  核心逻辑
+/etc/proxy-tools.conf                     配置文件
 ```
 
 ## 命令入口
@@ -15,15 +15,15 @@ VPS 统一代理控制台。
 `proxy` 根据命令名自动分发：
 
 ```text
-proxy                  → 菜单控制台
-proxy-on              → 开启代理
-proxy-off             → 关闭代理
-proxy-status          → 查看状态
-proxy-test            → 查看状态 / 连通性
-proxy-use             → 切换默认源
-docker-proxy-on       → 写入 Docker 代理配置
-docker-proxy-off      → 删除 Docker 代理配置
-docker-proxy-restart  → 重启 Docker
+proxy                  菜单控制台
+proxy-on              开启代理
+proxy-off             关闭代理
+proxy-status          查看状态
+proxy-test            查看状态 / 连通性
+proxy-use             切换默认源
+docker-proxy-on       写入 Docker 代理配置
+docker-proxy-off      删除 Docker 代理配置
+docker-proxy-restart  重启 Docker
 ```
 
 ## 文件
@@ -52,8 +52,61 @@ docker-proxy-restart  → 重启 Docker
 默认支持：
 
 ```text
-mobaxterm → 127.0.0.1:7890
-mihomo    → 127.0.0.1:50000
+mobaxterm    127.0.0.1:7890
+mihomo       127.0.0.1:50000
+```
+
+## 终端大图预览
+
+### `proxy`
+
+```text
+   _____ _____   ____                      _____           _
+  / ____/ ____| |  _ \                    / ____|         | |
+ | (___| |  __  | |_) | __ ___  ___   _  | |     ___ _ __ | |_ ___ _ __
+  \___ \ | |_ | |  __/ "__/ _ \/ __| | | | |    / _ \ "_ \| __/ _ \ "__|
+  ____) |__| |  | |  | | | (_) \__ \ |_| | |___|  __/ | | | ||  __/ |
+ |_____/_____|  |_|  |_|  \___/|___/\__, |\_____\___|_| |_|\__\___|_|
+                                      __/ |
+                                     |___/
+                  统一代理控制台 · proxy-on / proxy-off / proxy-use / proxy-status
+
+◆ 当前状态
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  总体状态         ● 已开启  当前代理已完整启用
+  默认代理源       VPS mihomo
+  HTTP 代理        127.0.0.1:50000
+  SOCKS 代理       127.0.0.1:50000
+  当前端口         127.0.0.1:50000  ● 可连接
+  直连规则         局域网 / Docker / WireGuard / EasyTier / 本地域名 / 自定义域名
+
+◆ 代理源
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [1] MobaXterm      127.0.0.1:7890         ● 可连接     备用
+  [2] VPS mihomo     127.0.0.1:50000        ● 可连接     当前使用
+
+◆ 模块状态
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  当前终端           ● 开启 127.0.0.1:50000
+  持久终端           ● 开启 127.0.0.1:50000
+  APT                ● 开启 127.0.0.1:50000
+  Git                ● 开启 127.0.0.1:50000
+  Wget               ● 开启 127.0.0.1:50000
+  Docker 配置        ● 开启 127.0.0.1:50000
+  Docker 运行时      ● 关闭
+  BT 面板进程        ● 开启 127.0.0.1:50000
+
+◆ 控制面板
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  1  开启代理        当前终端 + APT + Git + Wget + Docker 配置 + 重启 BT
+  2  关闭代理        清理终端 / APT / Git / Wget / Docker 配置 / 重启 BT
+  3  切换代理源      MobaXterm / VPS mihomo
+  4  重启 Docker     让 Docker 代理配置立即生效
+  5  重启 BT 面板    让宝塔重新继承当前环境变量
+  6  刷新状态
+  0  退出
+
+请选择 >
 ```
 
 ## 隐私处理
@@ -72,7 +125,7 @@ localhost,127.0.0.1,::1,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,10.8.0.0/24,192.
 
 ```sh
 cd SG-VPS/proxy
-bash install.example.sh
+./install.example.sh
 ```
 
 ## 使用
