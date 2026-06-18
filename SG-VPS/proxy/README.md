@@ -1,66 +1,94 @@
 # SG-VPS / proxy
 
-VPS 代理统一管理脚本。
+VPS 统一代理控制台。
 
-## 作用
-
-统一管理 VPS 上常见代理场景：
-
-- Shell 环境变量
-- APT 代理
-- Git 全局代理
-- Docker systemd 代理
-- 代理连通性测试
-
-## 代理源
-
-默认支持两个代理源：
+该模块采用当前生产环境同款结构：
 
 ```text
-moba    → MobaXterm / 本机转发代理，例如 127.0.0.1:7890
-mihomo  → VPS 本机 mihomo，例如 127.0.0.1:50000 / 50001
+/usr/local/bin/proxy*                 # 命令分发入口
+/usr/local/lib/proxy-tools/proxy-core.sh  # 核心逻辑
+/etc/proxy-tools.conf                 # 配置文件
+```
+
+## 命令入口
+
+`proxy` 根据命令名自动分发：
+
+```text
+proxy                  → 菜单控制台
+proxy-on              → 开启代理
+proxy-off             → 关闭代理
+proxy-status          → 查看状态
+proxy-test            → 查看状态 / 连通性
+proxy-use             → 切换默认源
+docker-proxy-on       → 写入 Docker 代理配置
+docker-proxy-off      → 删除 Docker 代理配置
+docker-proxy-restart  → 重启 Docker
 ```
 
 ## 文件
 
 | 文件 | 作用 |
 |---|---|
-| `proxy` | 主脚本 |
-| `proxy.env.example` | 配置模板 |
+| `proxy` | `/usr/local/bin/proxy*` 分发器 |
+| `proxy-core.sh` | 代理核心逻辑与中文 UI |
+| `proxy-tools.conf.example` | `/etc/proxy-tools.conf` 模板 |
+| `install.example.sh` | 安装示例 |
 
-## 推荐部署
+## 功能
+
+统一管理：
+
+- 当前 Shell 环境变量
+- `/etc/profile.d/proxy-env.sh`
+- APT 代理
+- Git 全局代理
+- Wget 代理段
+- Docker daemon systemd drop-in
+- BT 面板进程重启，让 BT 继承最新环境变量
+
+## 代理源
+
+默认支持：
+
+```text
+mobaxterm → 127.0.0.1:7890
+mihomo    → 127.0.0.1:50000
+```
+
+## 隐私处理
+
+公开仓库版本已移除私有域名信息。
+
+默认 `PROXY_NO_PROXY` 只保留：
+
+```text
+localhost,127.0.0.1,::1,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,10.8.0.0/24,192.168.50.0/24,.local
+```
+
+如果生产环境需要额外直连私有域名，请只写入本机 `/etc/proxy-tools.conf`，不要提交到公开仓库。
+
+## 部署
 
 ```sh
-sudo install -m 755 proxy /usr/local/bin/proxy
-sudo install -m 644 proxy.env.example /etc/sg-proxy.env
+cd SG-VPS/proxy
+bash install.example.sh
 ```
 
 ## 使用
 
 ```sh
-proxy status
-proxy on mihomo
-proxy on moba
-proxy off
-proxy test
+proxy
+proxy-status
+proxy-on
+proxy-off
+proxy-use mihomo
+proxy-use mobaxterm
+docker-proxy-restart
 ```
 
 ## 注意
 
-脚本会修改：
-
-```text
-/etc/profile.d/sg-proxy.sh
-/etc/apt/apt.conf.d/99-sg-proxy.conf
-~/.gitconfig
-/etc/systemd/system/docker.service.d/http-proxy.conf
-```
-
-如果启用 Docker 代理，脚本会执行：
-
-```sh
-systemctl daemon-reload
-systemctl restart docker
-```
-
-使用前请确认当前服务是否允许 Docker 重启。
+- `proxy-on/off` 会按配置决定是否写入 Docker 代理配置。
+- Docker daemon 代理配置写入后，需要重启 Docker 才会完全生效。
+- `BT_RESTART_ON_CHANGE=true` 时，开启/关闭代理会重启 BT 面板。
