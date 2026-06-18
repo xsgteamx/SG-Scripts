@@ -1,0 +1,2 @@
+#!/bin/sh
+exec /jffs/scripts/cs2-wg-snat.sh "$@"
