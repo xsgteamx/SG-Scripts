@@ -63,6 +63,54 @@ wg81 logs
 wg81 install
 ```
 
+## 界面预览
+
+### `wg81 status`
+
+```text
+  ____   ____        __        ______ ____  _
+ / ___| / ___|       \ \      / / ___|  _ \| |
+ \___ \| |  _  _____  \ \ /\ / / |  _| |_) | |
+  ___) | |_| ||_____|  \ V  V /| |_| |  __/| |
+ |____/ \____|          \_/\_/  \____|_|   |_|
+SG-WG81  ASUS Router WireGuard 运维脚本  v1.2
+────────────────────────────────────────────
+接口         wg81
+配置文件     /jffs/wg81/client.conf
+WG网段       10.8.0.0/24
+家里LAN      192.168.50.0/24
+────────────────────────────────────────────
+✔ client.conf 存在且字段完整
+✔ wg81 接口存在
+interface: wg81
+  public key: <hidden>
+  private key: (hidden)
+  listening port: 51771
+
+peer: <hidden>
+  endpoint: YOUR_VPS_PUBLIC_IP:51820
+  allowed ips: 10.8.0.0/24
+  latest handshake: 58 seconds ago
+  persistent keepalive: every 30 seconds
+✔ SG-VPS 10.8.0.1 可达
+✔ 自愈任务已安装
+```
+
+### `wg81` 菜单
+
+```text
+1) 启动
+2) 停止
+3) 重启
+4) 状态
+5) 体检
+6) 安装自愈
+7) 移除自愈
+8) 日志
+0) 退出
+输入序号：
+```
+
 ## client.conf 关键要求
 
 客户端配置不要使用全局路由：
