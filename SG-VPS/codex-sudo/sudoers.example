@@ -1,0 +1,11 @@
+# Example sudoers entries managed by codex-sudo
+# Do not copy blindly. Use the codex-sudo script to generate and validate.
+
+# Password required mode:
+codex ALL=(ALL:ALL) PASSWD:ALL
+
+# Temporary passwordless mode:
+# codex ALL=(ALL:ALL) NOPASSWD:ALL
+
+# Optional strict timestamp reset:
+# Defaults:codex timestamp_timeout=0
