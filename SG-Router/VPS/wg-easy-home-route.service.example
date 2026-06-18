@@ -1,0 +1,12 @@
+[Unit]
+Description=Route home LAN through wg-easy ASUS peer
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/wg-easy-home-route
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
