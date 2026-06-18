@@ -6,11 +6,14 @@
 
 ```text
 SG-Scripts/
-└── SG-Router/
-    ├── README.md
-    ├── wg81/   (ASUS WireGuard site-to-site + LAN export)
-    ├── cs2fw/  (CS2 UDP/TCP NAT repair)
-    └── VPS/    (SG-VPS wg-easy operations and route recovery)
+├── SG-Router/
+│   ├── README.md
+│   ├── wg81/   (ASUS WireGuard site-to-site + LAN export)
+│   ├── cs2fw/  (CS2 UDP/TCP NAT repair)
+│   └── VPS/    (SG-VPS wg-easy operations and route recovery)
+└── SG-VPS/
+    ├── proxy/       (APT / Git / Docker / Shell proxy switcher)
+    └── codex-sudo/  (codex sudo permission controller)
 ```
 
 ## SG-Router / wg81
@@ -52,12 +55,31 @@ SG-Scripts/
 - 说明 wg-easy Server Allowed IPs 的关键配置
 - 避免旧 61 链路和新 81 链路同时宣告家庭 LAN
 
+## SG-VPS / proxy
+
+功能：
+
+- 统一切换 VPS Shell / APT / Git / Docker 代理
+- 支持 MobaXterm 代理源
+- 支持 VPS 本机 mihomo 代理源
+- 支持状态检查与 curl 测试
+
+## SG-VPS / codex-sudo
+
+功能：
+
+- 集中管理 `codex` 用户 sudo 权限
+- 支持 pass / nopass / off / audit
+- 写入 sudoers 前执行 `visudo -cf` 校验
+- 默认安全，避免长期免密提权
+
 ## 安全原则
 
 - 不存储私钥
 - 不存储公网 IP
 - 不存储 PSK
 - 不写死生产环境参数
+- 不存储密码或 API Key
 
 ## 部署环境
 
@@ -65,6 +87,7 @@ SG-Scripts/
 - /jffs 可写
 - 支持 wg / ip / iptables / cru
 - SG-VPS 使用 wg-easy host network 模式
+- SG-VPS Ubuntu / Debian 系统
 
 ## 网络拓扑
 
