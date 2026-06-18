@@ -1,73 +1,121 @@
 # SG-Router / wg81
 
-ASUS Router WireGuard 运维模块
+ASUS Router WireGuard 运维模块。
 
 ## 作用
 
-该模块用于在 ASUS 原厂固件（SSH 环境）下：
+该模块用于在 ASUS 原厂固件 SSH 环境下：
 
 - 手动创建 WireGuard 接口 `wg81`
-- 替代 VPN Fusion
+- 替代 ASUS VPN Fusion
 - 让路由器主动连接 SG-VPS
-- 将家庭局域网（192.168.50.0/24）共享给 VPS
-
----
+- 将家庭局域网共享给 VPS
+- 在断网恢复后自动重建隧道
 
 ## 架构
 
 ```text
-SG-VPS (10.8.0.1)
-   ↑ WireGuard
-ASUS Router (10.8.0.2)
-   ↑ LAN bridge
-192.168.50.0/24
+SG-VPS
+  wg0: 10.8.0.1
+      ↓ WireGuard
+ASUS Router
+  wg81: 10.8.0.2
+  br0: 192.168.50.1/24
+      ↓
+Home LAN: 192.168.50.0/24
 ```
-
----
 
 ## 特点
 
-- ❌ 不依赖 DDNS
-- ❌ 不依赖 wg-quick
-- ❌ 不依赖 VPN Fusion
-- ✔ 使用 wg / ip / iptables / cru
-- ✔ watchdog 自动恢复
-
----
+- 不依赖 DDNS
+- 不依赖 wg-quick
+- 不依赖 VPN Fusion
+- 使用 `wg + ip + iptables + cru`
+- 自带菜单、状态、体检、日志、自愈任务
 
 ## 文件说明
 
 | 文件 | 作用 |
-|------|------|
-| wg81ctl | 主运维脚本（菜单 + 自动修复） |
-| wg81 | 短命令入口 |
-| client.conf.example | WireGuard 客户端模板 |
+|---|---|
+| `wg81ctl` | 主运维脚本 |
+| `wg81` | 短命令入口 |
+| `client.conf.example` | 客户端配置模板 |
 
----
+## 部署路径
 
-## 使用方法
+推荐放置：
 
-```sh
-wg81 start
-wg81 status
-wg81 restart
-wg81 logs
+```text
+/jffs/wg81/wg81ctl
+/jffs/wg81/wg81
+/jffs/wg81/client.conf
 ```
 
----
+## 使用
 
-## 关键配置
+```sh
+wg81
+wg81 start
+wg81 status
+wg81 doctor
+wg81 restart
+wg81 logs
+wg81 install
+```
 
-必须包含：
+## client.conf 关键要求
 
-- Endpoint = SG-VPS 公网 IP
-- AllowedIPs = 10.8.0.0/24
-- PersistentKeepalive = 25
+客户端配置不要使用全局路由：
 
----
+```ini
+AllowedIPs = 10.8.0.0/24
+```
 
-## 注意事项
+不要写：
 
-- 不要启用 0.0.0.0/0 路由（避免劫持路由器流量）
-- ASUS 原厂固件 reboot 后需 watchdog 恢复
-- wg81 接口必须与 LAN 转发规则匹配
+```ini
+AllowedIPs = 0.0.0.0/0
+```
+
+否则可能导致 ASUS 路由器自身默认路由被劫持。
+
+## 路由器侧 iptables 逻辑
+
+脚本会自动维护：
+
+```text
+wg81 → br0 FORWARD ACCEPT
+br0 → wg81 FORWARD ACCEPT
+10.8.0.0/24 → 192.168.50.0/24 MASQUERADE
+```
+
+这样 SG-VPS 可以通过 wg81 访问家庭 LAN。
+
+## 自愈
+
+安装自愈任务：
+
+```sh
+wg81 install
+```
+
+对应 cron：
+
+```text
+*/1 * * * * /jffs/wg81/wg81ctl watch
+```
+
+## 与 VPS 侧配合
+
+VPS 侧必须满足：
+
+```text
+ASUS peer Server Allowed IPs = 10.8.0.2/32, 192.168.50.0/24
+VPS route = 192.168.50.0/24 dev wg0
+```
+
+详细见：
+
+```text
+SG-Router/VPS/README.md
+```
