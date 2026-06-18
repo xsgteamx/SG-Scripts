@@ -1,0 +1,231 @@
+#!/bin/sh
+
+PATH="/usr/sbin:/usr/bin:/sbin:/bin:/jffs/wg81:/jffs/scripts:${PATH:-}"
+export PATH
+
+APP="SG-WG81"
+VER="1.2"
+IF="wg81"
+CONF="/jffs/wg81/client.conf"
+LAN_IF="br0"
+LAN_NET="192.168.50.0/24"
+WG_NET="10.8.0.0/24"
+SG_TUN_IP="10.8.0.1"
+CRON_NAME="sg_wg81_watch"
+LOG_TAG="sg-wg81"
+LOG_FILE="/tmp/sg-wg81.log"
+MAX_LOG_LINES="200"
+
+WG="/usr/sbin/wg"
+IP="/usr/sbin/ip"
+IPT="/usr/sbin/iptables"
+CRU="/usr/sbin/cru"
+LOGGER="/usr/bin/logger"
+[ -x "$LOGGER" ] || LOGGER="/bin/logger"
+
+ESC="$(printf '\033')"
+C0="${ESC}[0m"
+BOLD="${ESC}[1m"
+RED="${ESC}[31m"
+GREEN="${ESC}[32m"
+YELLOW="${ESC}[33m"
+CYAN="${ESC}[36m"
+
+ok() { printf "%s✔%s %s\n" "$GREEN" "$C0" "$*"; }
+warn() { printf "%s⚠%s %s\n" "$YELLOW" "$C0" "$*"; }
+bad() { printf "%s✘%s %s\n" "$RED" "$C0" "$*"; }
+info() { printf "%s➜%s %s\n" "$CYAN" "$C0" "$*"; }
+line() { printf "%s\n" "────────────────────────────────────────────"; }
+
+banner() {
+  clear 2>/dev/null || true
+  printf "%s" "$CYAN"
+  cat <<'BANNER'
+  ____   ____        __        ______ ____  _ 
+ / ___| / ___|       \ \      / / ___|  _ \| |
+ \___ \| |  _  _____  \ \ /\ / / |  _| |_) | |
+  ___) | |_| ||_____|  \ V  V /| |_| |  __/| |
+ |____/ \____|          \_/\_/  \____|_|   |_|
+BANNER
+  printf "%s" "$C0"
+  printf "%s%s%s  ASUS Router WireGuard 运维脚本  v%s\n" "$BOLD" "$APP" "$C0" "$VER"
+  line
+}
+
+logi() {
+  TS="$(date '+%Y-%m-%d %H:%M:%S' 2>/dev/null || date)"
+  printf "%s [%s] %s\n" "$TS" "$LOG_TAG" "$*" >> "$LOG_FILE"
+  tail -n "$MAX_LOG_LINES" "$LOG_FILE" > "${LOG_FILE}.tmp" 2>/dev/null && mv "${LOG_FILE}.tmp" "$LOG_FILE"
+  [ -x "$LOGGER" ] && "$LOGGER" -t "$LOG_TAG" "$*"
+}
+
+getval() {
+  key="$1"
+  awk -F= -v k="$key" '
+    $0 ~ "^[[:space:]]*" k "[[:space:]]*=" {
+      sub(/^[^=]*=/, "", $0)
+      sub(/[[:space:]]+#.*$/, "", $0)
+      gsub(/^[ \t]+|[ \t]+$/, "", $0)
+      print $0
+      exit
+    }
+  ' "$CONF"
+}
+
+first_addr() { echo "$1" | awk -F, '{print $1}' | sed 's/^[ \t]*//;s/[ \t]*$//'; }
+
+load_conf() {
+  [ -f "$CONF" ] || return 1
+  WG_ADDR_RAW="$(getval Address)"
+  WG_ADDR="$(first_addr "$WG_ADDR_RAW")"
+  PRIVATE_KEY="$(getval PrivateKey)"
+  PEER_PUBLIC_KEY="$(getval PublicKey)"
+  PRESHARED_KEY="$(getval PresharedKey)"
+  ENDPOINT="$(getval Endpoint)"
+  KEEPALIVE="$(getval PersistentKeepalive)"
+  [ -n "$KEEPALIVE" ] || KEEPALIVE="25"
+  [ -n "$WG_ADDR" ] && [ -n "$PRIVATE_KEY" ] && [ -n "$PEER_PUBLIC_KEY" ] && [ -n "$ENDPOINT" ]
+}
+
+cleanup_rules() {
+  while "$IPT" -D INPUT -i "$IF" -j ACCEPT 2>/dev/null; do :; done
+  while "$IPT" -D FORWARD -i "$IF" -o "$LAN_IF" -d "$LAN_NET" -j ACCEPT 2>/dev/null; do :; done
+  while "$IPT" -D FORWARD -i "$LAN_IF" -o "$IF" -s "$LAN_NET" -j ACCEPT 2>/dev/null; do :; done
+  while "$IPT" -t nat -D POSTROUTING -s "$WG_NET" -d "$LAN_NET" -o "$LAN_IF" -j MASQUERADE 2>/dev/null; do :; done
+}
+
+start_wg() {
+  banner
+  info "启动 $IF ..."
+  load_conf || { bad "client.conf 缺失或字段不完整"; exit 1; }
+
+  echo "$PRIVATE_KEY" > /tmp/${IF}_privatekey
+  chmod 600 /tmp/${IF}_privatekey
+  [ -n "$PRESHARED_KEY" ] && echo "$PRESHARED_KEY" > /tmp/${IF}_psk && chmod 600 /tmp/${IF}_psk
+
+  "$IP" link show "$IF" >/dev/null 2>&1 && "$IP" link del "$IF" 2>/dev/null || true
+  "$IP" link add "$IF" type wireguard || { bad "创建 $IF 失败"; exit 1; }
+  "$IP" addr add "$WG_ADDR" dev "$IF"
+
+  if [ -n "$PRESHARED_KEY" ]; then
+    "$WG" set "$IF" private-key /tmp/${IF}_privatekey peer "$PEER_PUBLIC_KEY" preshared-key /tmp/${IF}_psk endpoint "$ENDPOINT" allowed-ips "$WG_NET" persistent-keepalive "$KEEPALIVE"
+  else
+    "$WG" set "$IF" private-key /tmp/${IF}_privatekey peer "$PEER_PUBLIC_KEY" endpoint "$ENDPOINT" allowed-ips "$WG_NET" persistent-keepalive "$KEEPALIVE"
+  fi
+
+  rm -f /tmp/${IF}_privatekey /tmp/${IF}_psk
+  "$IP" link set dev "$IF" mtu 1420
+  "$IP" link set dev "$IF" up
+  "$IP" route replace "$WG_NET" dev "$IF"
+  echo 1 > /proc/sys/net/ipv4/ip_forward
+
+  cleanup_rules
+  "$IPT" -I INPUT 1 -i "$IF" -j ACCEPT
+  "$IPT" -I FORWARD 1 -i "$IF" -o "$LAN_IF" -d "$LAN_NET" -j ACCEPT
+  "$IPT" -I FORWARD 1 -i "$LAN_IF" -o "$IF" -s "$LAN_NET" -j ACCEPT
+  "$IPT" -t nat -I POSTROUTING 1 -s "$WG_NET" -d "$LAN_NET" -o "$LAN_IF" -j MASQUERADE
+
+  ok "$IF 已启动"
+  logi "$IF started endpoint=$ENDPOINT address=$WG_ADDR"
+  "$WG" show "$IF"
+}
+
+stop_wg() {
+  banner
+  info "停止 $IF ..."
+  cleanup_rules
+  "$IP" route del "$WG_NET" dev "$IF" 2>/dev/null || true
+  "$IP" link show "$IF" >/dev/null 2>&1 && "$IP" link del "$IF" 2>/dev/null || true
+  ok "$IF 已停止"
+  logi "$IF stopped"
+}
+
+status_wg() {
+  banner
+  printf "%s%-14s%s %s\n" "$BOLD" "接口" "$C0" "$IF"
+  printf "%s%-14s%s %s\n" "$BOLD" "配置文件" "$C0" "$CONF"
+  printf "%s%-14s%s %s\n" "$BOLD" "WG网段" "$C0" "$WG_NET"
+  printf "%s%-14s%s %s\n" "$BOLD" "家里LAN" "$C0" "$LAN_NET"
+  line
+  if load_conf; then ok "client.conf 存在且字段完整"; else bad "client.conf 缺失或字段不完整"; fi
+  "$IP" link show "$IF" >/dev/null 2>&1 && ok "$IF 接口存在" || bad "$IF 接口不存在"
+  "$WG" show "$IF" 2>/dev/null || true
+  ping -c 1 -W 2 "$SG_TUN_IP" >/dev/null 2>&1 && ok "SG-VPS $SG_TUN_IP 可达" || bad "SG-VPS $SG_TUN_IP 不可达"
+  [ -x "$CRU" ] && "$CRU" l 2>/dev/null | grep -q "$CRON_NAME" && ok "自愈任务已安装" || warn "自愈任务未安装"
+}
+
+doctor_wg() {
+  banner
+  info "开始体检 $APP ..."
+  [ -x "$WG" ] && ok "wg：$WG" || bad "缺少 wg"
+  [ -x "$IP" ] && ok "ip：$IP" || bad "缺少 ip"
+  [ -x "$IPT" ] && ok "iptables：$IPT" || bad "缺少 iptables"
+  [ -x "$CRU" ] && ok "cru：$CRU" || warn "cru 不存在"
+  [ -d /jffs ] && ok "/jffs 可用" || bad "/jffs 不可用"
+  load_conf && ok "client.conf 基础字段完整" || bad "client.conf 字段不完整"
+  "$IP" addr show "$LAN_IF" >/dev/null 2>&1 && ok "LAN接口 $LAN_IF 存在" || bad "LAN接口 $LAN_IF 不存在"
+  "$IP" link show "$IF" >/dev/null 2>&1 && ok "$IF 接口存在" || warn "$IF 接口不存在"
+  ping -c 1 -W 2 "$SG_TUN_IP" >/dev/null 2>&1 && ok "隧道 $SG_TUN_IP 可达" || warn "隧道 $SG_TUN_IP 不可达"
+}
+
+watch_wg() {
+  if ! "$IP" link show "$IF" >/dev/null 2>&1; then logi "$IF missing, start"; /jffs/wg81/wg81ctl start >/tmp/${IF}_watch.log 2>&1; exit 0; fi
+  if ! ping -c 1 -W 2 "$SG_TUN_IP" >/dev/null 2>&1; then logi "$IF ping failed, restart"; /jffs/wg81/wg81ctl restart >/tmp/${IF}_watch.log 2>&1; exit 0; fi
+  exit 0
+}
+
+install_watch() {
+  banner
+  [ -x "$CRU" ] || { bad "找不到 cru：$CRU"; exit 1; }
+  "$CRU" d "$CRON_NAME" 2>/dev/null
+  "$CRU" a "$CRON_NAME" "*/1 * * * * /jffs/wg81/wg81ctl watch"
+  ok "已安装每分钟自愈任务"
+  "$CRU" l | grep "$CRON_NAME" || true
+}
+
+uninstall_watch() {
+  banner
+  [ -x "$CRU" ] && "$CRU" d "$CRON_NAME" 2>/dev/null
+  ok "已移除自愈任务"
+}
+
+show_logs() {
+  banner
+  info "最近日志："
+  [ -f "$LOG_FILE" ] && tail -n 80 "$LOG_FILE" || warn "暂无运行日志"
+  [ -f /tmp/${IF}_watch.log ] && tail -n 80 /tmp/${IF}_watch.log
+}
+
+menu() {
+  while true; do
+    banner
+    echo "1) 启动  2) 停止  3) 重启  4) 状态  5) 体检  6) 安装自愈  7) 移除自愈  8) 日志  0) 退出"
+    printf "输入序号："
+    read ans
+    case "$ans" in
+      1) start_wg; read _;;
+      2) stop_wg; read _;;
+      3) stop_wg; sleep 1; start_wg; read _;;
+      4) status_wg; read _;;
+      5) doctor_wg; read _;;
+      6) install_watch; read _;;
+      7) uninstall_watch; read _;;
+      8) show_logs; read _;;
+      0) exit 0;;
+    esac
+  done
+}
+
+case "${1:-menu}" in
+  start|on|up) start_wg ;;
+  stop|off|down) stop_wg ;;
+  restart|reload) stop_wg; sleep 1; start_wg ;;
+  status|st) status_wg ;;
+  doctor|check|test) doctor_wg ;;
+  watch) watch_wg ;;
+  install|enable) install_watch ;;
+  uninstall|disable) uninstall_watch ;;
+  logs|log) show_logs ;;
+  menu) menu ;;
+  *) echo "Usage: $0 {start|stop|restart|status|doctor|watch|install|uninstall|logs|menu}"; exit 1 ;;
+esac
