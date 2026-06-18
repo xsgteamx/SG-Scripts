@@ -1,0 +1,14 @@
+# WireGuard client example for ASUS Router wg81
+# Copy to /jffs/wg81/client.conf and replace placeholders.
+# Do NOT commit real PrivateKey or PresharedKey.
+
+[Interface]
+Address = 10.8.0.2/32
+PrivateKey = YOUR_ROUTER_PRIVATE_KEY
+
+[Peer]
+PublicKey = YOUR_SG_VPS_WG_PUBLIC_KEY
+PresharedKey = YOUR_OPTIONAL_PRESHARED_KEY
+Endpoint = YOUR_VPS_PUBLIC_IP:51820
+AllowedIPs = 10.8.0.0/24
+PersistentKeepalive = 30
