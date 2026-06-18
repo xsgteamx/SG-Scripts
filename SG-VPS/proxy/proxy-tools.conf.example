@@ -1,0 +1,9 @@
+# proxy-tools config example
+# Install as: /etc/proxy-tools.conf
+
+PROXY_DEFAULT="mihomo"
+PROXY_MOBAXTERM="127.0.0.1:7890"
+PROXY_MIHOMO="127.0.0.1:50000"
+PROXY_NO_PROXY="localhost,127.0.0.1,::1,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,10.8.0.0/24,192.168.50.0/24,.local"
+DOCKER_PROXY_ENABLED="true"
+BT_RESTART_ON_CHANGE="true"
