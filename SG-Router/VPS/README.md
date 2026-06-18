@@ -36,17 +36,9 @@ services:
       - /dev/net/tun:/dev/net/tun
 ```
 
-原因：
-
-```text
-network_mode: host
-```
-
-会让 `wg0` 直接出现在 SG-VPS 宿主机上。这样 Nginx、iptables、端口转发、ping、curl 都能直接走 `wg0` 访问家里 LAN。
+`network_mode: host` 会让 `wg0` 直接出现在 SG-VPS 宿主机上。这样 Nginx、iptables、端口转发、ping、curl 都能直接走 `wg0` 访问家里 LAN。
 
 如果 wg-easy 使用 bridge 网络，宿主机访问 `192.168.50.0/24` 会复杂很多，不推荐作为生产链路。
-
----
 
 ## 2. ASUS peer 的 Server Allowed IPs
 
@@ -54,13 +46,6 @@ network_mode: host
 
 ```text
 10.8.0.2/32, 192.168.50.0/24
-```
-
-含义：
-
-```text
-10.8.0.2/32       → ASUS Router 的 WG 地址
-192.168.50.0/24  → ASUS Router 后面的家里 LAN
 ```
 
 如果只写：
@@ -82,8 +67,6 @@ SG-VPS 不能 ping 通 192.168.50.1
 PEER="$(wg show wg0 allowed-ips | awk '$0 ~ /10\.8\.0\.2\/32/ {print $1; exit}')"
 wg set wg0 peer "$PEER" allowed-ips 10.8.0.2/32,192.168.50.0/24
 ```
-
----
 
 ## 3. SG-VPS 宿主机必须有 LAN 路由
 
@@ -114,10 +97,6 @@ ip route | grep -E '10\.8|192\.168\.50'
 192.168.50.1 via 默认网关 dev eth0
 ```
 
-如果出现异常，说明 LAN 流量没有进 WireGuard。
-
----
-
 ## 4. 61 与 81 不能同时宣告同一个 LAN
 
 旧链路和新链路如果都宣告：
@@ -137,8 +116,6 @@ systemctl mask wg-quick@wg-jcyz-lan 2>/dev/null || true
 
 只保留配置文件作为冷备，不要同时 up。
 
----
-
 ## 5. 重启后路由可能丢失
 
 wg-easy 容器重启、SG-VPS 重启、wg0 重建后，手动添加的：
@@ -157,7 +134,38 @@ wg-easy-home-route.sh
 
 配合 systemd timer 每分钟兜底恢复。
 
----
+## 命令输出预览
+
+### 路由异常时
+
+```text
+root@vps:~# ip route get 192.168.50.1
+192.168.50.1 via 10.0.0.1 dev eth0 src 10.0.0.2
+```
+
+含义：家庭 LAN 没有走 `wg0`，需要恢复路由。
+
+### 路由正常时
+
+```text
+root@vps:~# ip route get 192.168.50.1
+192.168.50.1 dev wg0 src 10.8.0.1
+```
+
+### 自愈脚本输出
+
+```text
+root@vps:~# /usr/local/sbin/wg-easy-home-route
+OK: 192.168.50.0/24 -> wg0
+192.168.50.1 dev wg0 src 10.8.0.1
+```
+
+### systemd timer 状态
+
+```text
+root@vps:~# systemctl list-timers | grep wg-easy-home-route
+wg-easy-home-route.timer  loaded active waiting  Keep home LAN route through wg0
+```
 
 ## 6. 常用排障命令
 
