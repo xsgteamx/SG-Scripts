@@ -1,0 +1,134 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+APP="SG-CODEX-SUDO"
+VER="1.0"
+USER_NAME="${CODEX_USER:-codex}"
+SUDOERS_FILE="/etc/sudoers.d/90-sg-codex-sudo"
+TMP_FILE="/tmp/90-sg-codex-sudo.$$"
+
+C0='\033[0m'; B='\033[1m'; G='\033[32m'; R='\033[31m'; Y='\033[33m'; C='\033[36m'; M='\033[35m'
+
+banner() {
+  clear 2>/dev/null || true
+  printf "${M}"
+  cat <<'BANNER'
+   _____ _____       _____ ____  _____  ________   __
+  / ____/ ____|     / ____/ __ \|  __ \|  ____\ \ / /
+ | (___| |  __ ____| |   | |  | | |  | | |__   \ V / 
+  \___ \ | |_ |____| |   | |  | | |  | |  __|   > <  
+  ____) | |__|     | |___| |__| | |__| | |____ / . \ 
+ |_____/ \_____|    \_____\____/|_____/|______/_/ \_\
+BANNER
+  printf "${C0}"
+  printf "${B}${APP}${C0}  Codex sudo operations  v%s\n" "$VER"
+  printf "────────────────────────────────────────────\n"
+}
+
+ok(){ printf "${G}✔${C0} %s\n" "$*"; }
+warn(){ printf "${Y}⚠${C0} %s\n" "$*"; }
+bad(){ printf "${R}✘${C0} %s\n" "$*"; }
+info(){ printf "${C}➜${C0} %s\n" "$*"; }
+
+need_root() {
+  if [ "${EUID:-$(id -u)}" -ne 0 ]; then
+    bad "需要 root 权限，请使用 sudo。"
+    exit 1
+  fi
+}
+
+check_user() {
+  if ! id "$USER_NAME" >/dev/null 2>&1; then
+    bad "用户不存在：$USER_NAME"
+    exit 1
+  fi
+}
+
+validate_and_install() {
+  chmod 0440 "$TMP_FILE"
+  if visudo -cf "$TMP_FILE" >/dev/null; then
+    install -m 0440 -o root -g root "$TMP_FILE" "$SUDOERS_FILE"
+    rm -f "$TMP_FILE"
+    ok "sudoers 已更新：$SUDOERS_FILE"
+  else
+    rm -f "$TMP_FILE"
+    bad "visudo 校验失败，未写入 sudoers。"
+    exit 1
+  fi
+}
+
+set_pass() {
+  need_root
+  check_user
+  banner
+  info "设置 $USER_NAME sudo：需要密码"
+  cat > "$TMP_FILE" <<EOF
+# Managed by SG-CODEX-SUDO
+Defaults:${USER_NAME} timestamp_timeout=0
+${USER_NAME} ALL=(ALL:ALL) PASSWD:ALL
+EOF
+  validate_and_install
+}
+
+set_nopass() {
+  need_root
+  check_user
+  banner
+  warn "设置 $USER_NAME sudo：免密模式，建议只临时使用"
+  cat > "$TMP_FILE" <<EOF
+# Managed by SG-CODEX-SUDO
+Defaults:${USER_NAME} timestamp_timeout=0
+${USER_NAME} ALL=(ALL:ALL) NOPASSWD:ALL
+EOF
+  validate_and_install
+}
+
+turn_off() {
+  need_root
+  banner
+  rm -f "$SUDOERS_FILE"
+  ok "已关闭脚本管理的 $USER_NAME sudo 授权"
+}
+
+status() {
+  banner
+  printf "%-16s %s\n" "User:" "$USER_NAME"
+  printf "%-16s %s\n" "Sudoers:" "$SUDOERS_FILE"
+  printf "────────────────────────────────────────────\n"
+
+  if id "$USER_NAME" >/dev/null 2>&1; then
+    ok "用户存在：$USER_NAME"
+  else
+    bad "用户不存在：$USER_NAME"
+  fi
+
+  if [ -f "$SUDOERS_FILE" ]; then
+    ok "管理文件存在"
+    sed -n '1,120p' "$SUDOERS_FILE"
+  else
+    warn "管理文件不存在，脚本未授予 sudo。"
+  fi
+
+  printf "────────────────────────────────────────────\n"
+  info "sudo -l -U $USER_NAME："
+  sudo -l -U "$USER_NAME" 2>/dev/null || true
+}
+
+audit() {
+  banner
+  info "搜索 sudoers 中与 $USER_NAME 相关的规则"
+  grep -RniE "(^|[^a-zA-Z0-9_-])${USER_NAME}([^a-zA-Z0-9_-]|$)|%${USER_NAME}" /etc/sudoers /etc/sudoers.d 2>/dev/null || true
+}
+
+case "${1:-status}" in
+  status|st) status ;;
+  pass|passwd|password) set_pass ;;
+  nopass|nopasswd|passwordless) set_nopass ;;
+  off|disable|remove) turn_off ;;
+  audit) audit ;;
+  *)
+    banner
+    echo "Usage: codex-sudo {status|pass|nopass|off|audit}"
+    exit 1
+    ;;
+esac
